@@ -282,7 +282,6 @@ class Rmcga():
         print(">>>Start gene annotation...")
         self.gwas_result.CHR = self.gwas_result.CHR.astype(str)
         self.gwas_result = self.parallelize_dataframe(self.gwas_result, self.parallelize_function_mref)
-        print(self.gwas_result.head(5))
         self.gwas_result['Gene']  = self.gwas_result['Gene'].str.strip("[]")
         self.gwas_result[['Gene Name', 'Gene Start', 'Gene End', 'Distance']]  = self.gwas_result.Gene.str.split(",", expand = True)
         self.gwas_result = self.gwas_result.drop(columns=['Gene'])
@@ -305,11 +304,12 @@ class Rmcga():
       
     def deg_upstream_filter(self):
         print(">>>Start filtering SNPs by position and DEG...")
-        final_data <- self.gwas_result[self.gwas_result.ChIP_valid != 0]
-        final_data <- final_data.dropna(subset = ["Distance"])
-        final_data = final_data[final_data.Distance <= 2000 & final_data.Distance >= -8000]
-        final_data = final_data[final_data.DEG == TRUE]
-        final_data = final_data.iloc[:,[3,4,5,8,9,10,11,12,13]]
+        final_data = self.gwas_result.loc[self.gwas_result["ChIP_valid"] != 0]
+        final_data = final_data.dropna(subset = ["Distance"])
+        final_data["Distance"] = pd.to_numeric(final_data["Distance"], errors='coerce')
+        final_data = final_data.loc[(final_data["Distance"] <= 2000) & (final_data["Distance"] >= -8000)]
+        final_data = final_data.loc[final_data["DEG"] == True]
+        final_data = final_data.iloc[:,[0,1,2,5,6,7,8,9,10]]
         print(">>>Done filtering, writing .csv file...")
         self.tocsv(final_data, "valid_deg_upstream_snp.csv")
 
