@@ -209,11 +209,11 @@ class Rmcga():
           return 0
 
     def parallelize_function_wide(self, df):
-        df["ChIP_1000"] = df.apply(lambda r: self.map_pos(r["CHR"], r["BP"], 25), axis=1)
+        df["ChIP_wide"] = df.apply(lambda r: self.map_pos(r["CHR"], r["BP"], 25), axis=1)
         return df
 
     def parallelize_function_narrow(self, df):
-        df["ChIP_500"] = df.apply(lambda r: self.map_pos(r["CHR"], r["BP"], 10), axis=1)
+        df["ChIP_narrow"] = df.apply(lambda r: self.map_pos(r["CHR"], r["BP"], 10), axis=1)
         return df
 
     def parallelize_function_valid(self, df):
@@ -224,7 +224,7 @@ class Rmcga():
         num_processes = mp.cpu_count()
         print(f">>>Preparing parallel processing...\n>>>CPU count: {num_processes}")
         print(">>>Splitting gwas file...")
-        num_processes = 50
+        num_processes = 20
         df_split = np.array_split(df, num_processes)
         print(">>>Parallel processing...")
         with mp.Pool(num_processes) as p:
@@ -246,7 +246,7 @@ class Rmcga():
         print(">>>Mapping with motif accurately...")
         gwas2 = self.parallelize_dataframe(gwas2, self.parallelize_function_valid)
         self.totxt(gwas2.SNP[gwas2['ChIP_valid'] != 0], "SNP_valid_list.txt")
-        self.gwas_result = pd.merge(gwas1, gwas2, how="left", on=["CHR","SNP","BP","ChIP_1000","ChIP_500"])
+        self.gwas_result = pd.merge(gwas1, gwas2, how="left", on=["CHR","SNP","BP","ChIP_wide","ChIP_narrow"])
         print(">>>Filling NA...")
         self.gwas_result = self.gwas_result.fillna(0)
         print(">>>Writing gwas_result.txt file...")
@@ -282,7 +282,8 @@ class Rmcga():
         print(">>>Start gene annotation...")
         self.gwas_result.CHR = self.gwas_result.CHR.astype(str)
         self.gwas_result = self.parallelize_dataframe(self.gwas_result, self.parallelize_function_mref)
-        self.gwas_result['Gene']  = self.gwas_result.Gene.str.strip("[]")
+        print(self.gwas_result.head(5))
+        self.gwas_result['Gene']  = self.gwas_result['Gene'].str.strip("[]")
         self.gwas_result[['Gene Name', 'Gene Start', 'Gene End', 'Distance']]  = self.gwas_result.Gene.str.split(",", expand = True)
         self.gwas_result = self.gwas_result.drop(columns=['Gene'])
         self.gwas_result['Gene Name']  = self.gwas_result["Gene Name"].str.strip("'")
@@ -301,6 +302,16 @@ class Rmcga():
         self.totxt(self.gwas_result, "gwas_result_anotted_deg.txt")
         print(">>>Done DEG annotation...")
         return self.gwas_result
+      
+    def deg_upstream_filter(self):
+        print(">>>Start filtering SNPs by position and DEG...")
+        final_data <- self.gwas_result[self.gwas_result.ChIP_valid != 0]
+        final_data <- final_data.dropna(subset = ["Distance"])
+        final_data = final_data[final_data.Distance <= 2000 & final_data.Distance >= -8000]
+        final_data = final_data[final_data.DEG == TRUE]
+        final_data = final_data.iloc[:,[3,4,5,8,9,10,11,12,13]]
+        print(">>>Done filtering, writing .csv file...")
+        self.tocsv(final_data, "valid_deg_upstream_snp.csv")
 
 if __name__ == '__main__':
     mapping_result = Rmcga()
@@ -323,7 +334,8 @@ if __name__ == '__main__':
     mapping_result.load_deg()
     mapping_result.gene_annotation()
     mapping_result.deg_annotation()
-    print(">>>Writing result csv...")
+    print(">>>Writing all mapping result csv...")
     mapping_result.tocsv(mapping_result.gwas_result, "gwas_result.csv")
+    mapping_result.deg_upstream_filter()
     print(">>>All code done!")
     print("--- %s seconds ---" % (time.time() - start_time))
