@@ -304,7 +304,7 @@ class Rmcga():
       
     def deg_upstream_filter(self):
         print(">>>Start filtering SNPs by position and DEG...")
-        final_data = self.gwas_result.loc[self.gwas_result["ChIP_valid"] != 0]
+        final_data = self.gwas_result.loc[self.gwas_result["ChIP_valid"] != "0"]
         final_data = final_data.dropna(subset = ["Distance"])
         final_data["Distance"] = pd.to_numeric(final_data["Distance"], errors='coerce')
         final_data = final_data.loc[(final_data["Distance"] <= 2000) & (final_data["Distance"] >= -8000)]
