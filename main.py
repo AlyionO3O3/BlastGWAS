@@ -8,6 +8,7 @@ from liftover import ChainFile
 from tqdm import tqdm
 import multiprocessing as mp
 import time
+import sys 
 start_time = time.time()
 tqdm.pandas()
 # python3 -m venv tutorial-env
@@ -85,7 +86,8 @@ class Rmcga():
             print(">>>Refgene file created...")
             return self.refgene
         except (Exception,):
-            print(">>>Fail to create refgene file...")
+            print(">>>Fail to create refgene file, ending program...")
+            sys.exit(1)
 
     def load_tf(self):
         try:
@@ -312,6 +314,41 @@ class Rmcga():
         final_data = final_data.iloc[:,[0,1,2,5,6,7,8,9,10]]
         print(">>>Done filtering, writing .csv file...")
         self.tocsv(final_data, "valid_deg_upstream_snp.csv")
+        
+    def scrape_gtex(self,snpID):
+        X = np.empty(shape=[0, 3])
+        client = coreapi.Client()
+        result = client.get("https://gtexportal.org/rest/v1/association/singleTissueEqtl?snpId="+snpID)
+        for i in range(len(result["singleTissueEqtl"])):
+          pvalue = result["singleTissueEqtl"][i]['pValue']
+          tissue = result["singleTissueEqtl"][i]['tissueSiteDetailId']
+          nes = result["singleTissueEqtl"][i]['nes']
+          inf = np.array([[tissue, nes, pvalue]])
+          X = np.append(X, inf, axis=0)
+        return X
+      
+    def map_snp_to_gtex(self):
+        gtex_array = np.empty(shape=[0, 4])
+        snp_list = self.final_data["SNP"]
+        i = len(snp_list)
+        j = 0
+        for snpID in snp_list:
+          if self.scrape_gtex(snpID).size == 0:
+            print(f"No GTEx result for {snpID}!")
+          else:
+            info_array = self.scrape_gtex(snpID)
+            info_array = np.insert(info_array, 0, snpID, axis = 1)
+            gtex_array = np.append(gtex_array, info_array, axis = 0)
+            print(info_array)
+            j += 1
+          i -= 1
+          if i != 0:
+            print(f'{i} SNPs left!')
+          else:
+            print(f'Scraping done, {j} SNPs found GTEx eQTL data!!')
+            
+          gtex_df = pd.DataFrame(gtex_array,columns = ["SNP", "Tissue", "NES", "p-value"])
+          gtex_df.to_csv(filepath + "SNPs_GTEx.csv", index = False)
 
 if __name__ == '__main__':
     mapping_result = Rmcga()
@@ -337,5 +374,6 @@ if __name__ == '__main__':
     print(">>>Writing all mapping result csv...")
     mapping_result.tocsv(mapping_result.gwas_result, "gwas_result.csv")
     mapping_result.deg_upstream_filter()
+    mapping_result.map_snp_to_gtex()
     print(">>>All code done!")
     print("--- %s seconds ---" % (time.time() - start_time))
